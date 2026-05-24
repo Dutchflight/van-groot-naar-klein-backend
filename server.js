@@ -9,8 +9,15 @@ const os = require("os");
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// CORS: sta alle origins toe
-app.use(cors());
+// CORS: sta alle origins expliciet toe
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
+// Preflight requests afhandelen
+app.options("*", cors());
 
 // Tijdelijke uploadmap
 const upload = multer({
@@ -35,30 +42,27 @@ app.post("/upload", upload.single("file"), (req, res) => {
 
   ffmpeg(inputPath)
     .outputOptions([
-      "-c:v libx264",       // H.264 codec — beste compressie
-      "-crf 28",            // Kwaliteit: 0=perfect, 51=klein; 28=goed evenwicht
-      "-preset slow",       // Langzamer = kleiner bestand
-      "-c:a aac",           // Audio codec
-      "-b:a 128k",          // Audio bitrate
-      "-movflags faststart", // Snel streamen
-      "-vf scale=-2:720",   // Max 720p hoogte, breedte automatisch
+      "-c:v libx264",
+      "-crf 28",
+      "-preset slow",
+      "-c:a aac",
+      "-b:a 128k",
+      "-movflags faststart",
+      "-vf scale=-2:720",
     ])
     .output(outputPath)
     .on("start", (cmd) => console.log("FFmpeg gestart:", cmd))
     .on("progress", (p) => console.log(`Voortgang: ${Math.round(p.percent || 0)}%`))
     .on("end", () => {
       console.log("Compressie klaar!");
-
       const stat = fs.statSync(outputPath);
-      console.log(`Outputgrootte: ${stat.size} bytes`);
-
       res.setHeader("Content-Type", "video/mp4");
       res.setHeader("Content-Disposition", `attachment; filename="compressed.mp4"`);
       res.setHeader("Content-Length", stat.size);
+      res.setHeader("Access-Control-Allow-Origin", "*");
 
       const stream = fs.createReadStream(outputPath);
       stream.pipe(res);
-
       stream.on("close", () => {
         fs.unlink(inputPath, () => {});
         fs.unlink(outputPath, () => {});
